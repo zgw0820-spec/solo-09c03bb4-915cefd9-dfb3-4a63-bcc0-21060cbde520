@@ -1,0 +1,98 @@
+waiting for server to start....2026-11-20 06:55:12.009 GMT [451] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-11-20 06:55:12.009 GMT [451] LOG:  listening on IPv4 address "127.0.0.1", port 55432
+2026-11-20 06:55:12.009 GMT [451] LOG:  listening on Unix socket "/workspace/.local-pg/.s.PGSQL.55432"
+2026-11-20 06:55:12.010 GMT [454] LOG:  database system was shut down at 2026-11-20 06:54:48 GMT
+2026-11-20 06:55:12.012 GMT [451] LOG:  database system is ready to accept connections
+ done
+server started
+2026-11-20 06:55:19.439 GMT [478] ERROR:  relation "xact_log" does not exist at character 13
+2026-11-20 06:55:19.439 GMT [478] STATEMENT:  DELETE FROM xact_log
+2026-11-20 06:55:34.758 GMT [500] WARNING:  there is already a transaction in progress
+2026-11-20 06:55:34.760 GMT [500] ERROR:  syntax error at or near "$1" at character 21
+2026-11-20 06:55:34.760 GMT [500] STATEMENT:  PREPARE TRANSACTION $1
+2026-11-20 07:00:12.110 GMT [452] LOG:  checkpoint starting: time
+2026-11-20 07:00:22.733 GMT [452] LOG:  checkpoint complete: wrote 109 buffers (0.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=10.622 s, sync=0.001 s, total=10.624 s; sync files=0, longest=0.000 s, average=0.000 s; distance=153 kB, estimate=153 kB; lsn=0/14A67F8, redo lsn=0/14A67C0
+2026-11-20 07:03:08.967 GMT [598] WARNING:  there is already a transaction in progress
+2026-11-20 07:05:12.833 GMT [452] LOG:  checkpoint starting: time
+2026-11-20 07:05:14.241 GMT [452] LOG:  1 two-phase state file was written for a long-running prepared transaction
+2026-11-20 07:05:14.242 GMT [452] LOG:  checkpoint complete: wrote 15 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.406 s, sync=0.001 s, total=1.410 s; sync files=0, longest=0.000 s, average=0.000 s; distance=1 kB, estimate=137 kB; lsn=0/14A6E20, redo lsn=0/14A6DE8
+2026-11-20 07:10:12.342 GMT [452] LOG:  checkpoint starting: time
+2026-11-20 07:10:12.449 GMT [452] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.102 s, sync=0.001 s, total=0.107 s; sync files=0, longest=0.000 s, average=0.000 s; distance=0 kB, estimate=124 kB; lsn=0/14A6FA0, redo lsn=0/14A6F68
+2026-11-20 07:23:07.435 GMT [767] FATAL:  terminating connection due to administrator command at character 13
+2026-11-20 07:23:07.435 GMT [767] STATEMENT:  DELETE FROM ledger_entries
+2026-11-20 07:23:07.435 GMT [664] FATAL:  terminating connection due to administrator command at character 13
+2026-11-20 07:23:07.435 GMT [664] STATEMENT:  DELETE FROM ledger_entries
+2026-11-20 07:23:07.435 GMT [869] ERROR:  syntax error at or near "$1" at character 19
+2026-11-20 07:23:07.435 GMT [869] STATEMENT:  ROLLBACK PREPARED $1
+2026-11-20 07:23:16.944 GMT [607] LOG:  could not send data to client: Broken pipe
+2026-11-20 07:23:16.944 GMT [607] STATEMENT:  
+	CREATE TABLE IF NOT EXISTS ledger_entries (
+	    id            BIGSERIAL PRIMARY KEY,
+	    settlement_no TEXT NOT NULL,
+	    direction     TEXT NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
+	    amount        NUMERIC(18, 2) NOT NULL CHECK (amount >= 0),
+	    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_settlement
+	    ON ledger_entries(settlement_no);
+	
+	CREATE TABLE IF NOT EXISTS xact_log (
+	    id            BIGSERIAL PRIMARY KEY,
+	    settlement_no TEXT NOT NULL,
+	    event         TEXT NOT NULL CHECK (event IN (
+	                      'prepared', 'decision_commit', 'decision_abort',
+	                      'committed', 'aborted')),
+	    note          TEXT,
+	    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE INDEX IF NOT EXISTS idx_xact_log_settlement ON xact_log(settlement_no);
+	
+2026-11-20 07:23:16.944 GMT [607] FATAL:  connection to client lost
+2026-11-20 07:23:16.944 GMT [607] STATEMENT:  
+	CREATE TABLE IF NOT EXISTS ledger_entries (
+	    id            BIGSERIAL PRIMARY KEY,
+	    settlement_no TEXT NOT NULL,
+	    direction     TEXT NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
+	    amount        NUMERIC(18, 2) NOT NULL CHECK (amount >= 0),
+	    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_settlement
+	    ON ledger_entries(settlement_no);
+	
+	CREATE TABLE IF NOT EXISTS xact_log (
+	    id            BIGSERIAL PRIMARY KEY,
+	    settlement_no TEXT NOT NULL,
+	    event         TEXT NOT NULL CHECK (event IN (
+	                      'prepared', 'decision_commit', 'decision_abort',
+	                      'committed', 'aborted')),
+	    note          TEXT,
+	    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE INDEX IF NOT EXISTS idx_xact_log_settlement ON xact_log(settlement_no);
+	
+2026-11-20 07:23:45.614 GMT [900] WARNING:  there is already a transaction in progress
+2026-11-20 07:23:48.504 GMT [954] WARNING:  there is already a transaction in progress
+2026-11-20 07:23:51.445 GMT [1015] WARNING:  there is already a transaction in progress
+2026-11-20 07:23:53.741 GMT [1060] WARNING:  there is already a transaction in progress
+2026-11-20 07:23:54.807 GMT [1077] ERROR:  syntax error at or near "$1" at character 19
+2026-11-20 07:23:54.807 GMT [1077] STATEMENT:  ROLLBACK PREPARED $1
+2026-11-20 07:24:12.467 GMT [1097] WARNING:  there is already a transaction in progress
+2026-11-20 07:24:15.911 GMT [1153] WARNING:  there is already a transaction in progress
+2026-11-20 07:24:18.889 GMT [1214] WARNING:  there is already a transaction in progress
+2026-11-20 07:24:21.024 GMT [1256] WARNING:  there is already a transaction in progress
+2026-11-20 07:24:22.858 GMT [1288] WARNING:  there is already a transaction in progress
+2026-11-20 07:24:59.295 GMT [1334] WARNING:  there is already a transaction in progress
+2026-11-20 07:25:12.748 GMT [452] LOG:  checkpoint starting: time
+2026-11-20 07:25:13.563 GMT [452] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.802 s, sync=0.001 s, total=0.815 s; sync files=0, longest=0.000 s, average=0.000 s; distance=14 kB, estimate=113 kB; lsn=0/14AA878, redo lsn=0/14AA840
+2026-11-20 07:28:53.880 GMT [1489] WARNING:  there is already a transaction in progress
+2026-11-20 07:28:55.361 GMT [1530] WARNING:  there is already a transaction in progress
+2026-11-20 07:28:57.014 GMT [1576] WARNING:  there is already a transaction in progress
+2026-11-20 07:28:58.430 GMT [1613] WARNING:  there is already a transaction in progress
+2026-11-20 07:28:58.658 GMT [1629] WARNING:  there is already a transaction in progress
+2026-11-20 07:29:36.532 GMT [1684] WARNING:  there is already a transaction in progress
+2026-11-20 07:29:39.515 GMT [1738] WARNING:  there is already a transaction in progress
+2026-11-20 07:29:42.757 GMT [1799] WARNING:  there is already a transaction in progress
+2026-11-20 07:29:45.006 GMT [1845] WARNING:  there is already a transaction in progress
+2026-11-20 07:29:47.036 GMT [1876] WARNING:  there is already a transaction in progress
+2026-11-20 07:30:12.662 GMT [452] LOG:  checkpoint starting: time
+2026-11-20 07:30:14.065 GMT [452] LOG:  checkpoint complete: wrote 15 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.403 s, sync=0.001 s, total=1.403 s; sync files=0, longest=0.000 s, average=0.000 s; distance=17 kB, estimate=103 kB; lsn=0/14AF058, redo lsn=0/14AF020
