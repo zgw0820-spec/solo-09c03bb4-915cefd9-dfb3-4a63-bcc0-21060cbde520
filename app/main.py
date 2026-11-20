@@ -100,8 +100,63 @@ def api_recover(settlement_no: str = Form(...)):
         settlement_no = validate_settlement_no(settlement_no)
     except InvalidSettlementNo as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if db.get_reversal(settings.dsn_debit, settlement_no) \
+            or db.get_reversal(settings.dsn_credit, settlement_no):
+        return JSONResponse(
+            {"ok": False,
+             "error": f"{settlement_no} 是已受理的冲正单，请使用冲正恢复"},
+            status_code=409)
     result = coordinator.recover_settlement(
         settings.dsn_debit, settings.dsn_credit, settlement_no)
+    return JSONResponse({"ok": True, "result": result.__dict__})
+
+
+@app.get("/api/reversal/{original_no}")
+def api_reversal_view(original_no: str):
+    """Reversals linked to one original settlement, with their outcome."""
+    try:
+        original_no = validate_settlement_no(original_no)
+    except InvalidSettlementNo as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    return JSONResponse({
+        "original_no": original_no,
+        "debit_ledger": db.get_ledger_entry(settings.dsn_debit, original_no),
+        "credit_ledger": db.get_ledger_entry(settings.dsn_credit, original_no),
+        "reversals": coordinator.list_reversals_view(
+            settings.dsn_debit, settings.dsn_credit, original_no),
+    })
+
+
+@app.post("/api/reversal/start")
+def api_reversal_start(original_no: str = Form(...), reversal_no: str = Form(...)):
+    try:
+        original_no = validate_settlement_no(original_no)
+        reversal_no = validate_settlement_no(reversal_no)
+    except InvalidSettlementNo as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    try:
+        result = coordinator.start_reversal(
+            settings.dsn_debit, settings.dsn_credit,
+            original_no, reversal_no, settings.failpoint)
+    except coordinator.ReversalRejected as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
+    return JSONResponse({"ok": True, "result": result.__dict__})
+
+
+@app.post("/api/reversal/recover")
+def api_reversal_recover(reversal_no: str = Form(...), original_no: str = Form("")):
+    try:
+        reversal_no = validate_settlement_no(reversal_no)
+        if original_no:
+            original_no = validate_settlement_no(original_no)
+    except InvalidSettlementNo as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    try:
+        result = coordinator.recover_reversal(
+            settings.dsn_debit, settings.dsn_credit,
+            original_no or None, reversal_no)
+    except coordinator.ReversalRejected as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
     return JSONResponse({"ok": True, "result": result.__dict__})
 
 

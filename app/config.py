@@ -77,3 +77,16 @@ def gid_for(settlement_no: str) -> str:
     if not GID_RE.fullmatch(gid):
         raise InvalidSettlementNo("生成的事务 GID 非法")
     return gid
+
+
+def gid_for_reversal(reversal_no: str) -> str:
+    """Prepared-transaction GID for a reversal.
+
+    A distinct prefix is important: the original settlement and its reversal
+    are different transactions that may coexist in pg_prepared_xacts while an
+    operator inspects a crashed run.
+    """
+    gid = f"revers_{reversal_no}"
+    if not GID_RE.fullmatch(gid):
+        raise InvalidSettlementNo("生成的冲正事务 GID 非法")
+    return gid

@@ -88,11 +88,42 @@
     </div>
     <div id="rec-msg"></div>
   </section>
+
+  <section class="card">
+    <h2>④ 全额冲正（原结算号 + 新冲正单号）</h2>
+    <div class="row">
+      <div style="flex:1"><label>原结算号</label><input id="rev-orig" placeholder="例如 S20261120001"></div>
+      <div style="flex:1"><label>冲正单号</label><input id="rev-no" placeholder="例如 R20261120001"></div>
+      <div style="align-self:flex-end">
+        <button class="secondary" onclick="viewReversals()">查看关联冲正</button>
+        <button onclick="startReversal()">办理全额冲正</button>
+        <button class="secondary" onclick="recoverReversal()">按冲正单号恢复</button>
+      </div>
+    </div>
+    <p class="muted" style="margin:8px 0 0">
+      仅受理两库均有原流水且金额一致的普通结算；冲正后两库各一笔与原流水等额、方向相反的流水，原流水保留。
+      同一原单最多成功冲正一次；已有冲正单在办理时页面会给出该单号。
+    </p>
+    <div id="rev-msg"></div>
+    <div style="margin-top:10px">
+      <b style="font-size:13px">该原结算关联的冲正单</b>
+      <table id="tbl-reversals" style="margin-top:6px">
+        <thead><tr><th>冲正单号</th><th>登记状态</th><th>处理结果</th>
+          <th>扣款库流水</th><th>入账库流水</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <pre id="rev-logs" class="empty" style="display:none"></pre>
+    </div>
+  </section>
 </main>
 
 <script>
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtRow(r) { return r ? (r.direction + ' ' + r.amount) : '—'; }
 function showMsg(el, text, cls) {
-  el.innerHTML = '<div class="msg ' + cls + '">' + text + '</div>';
+  el.innerHTML = '<div class="msg ' + cls + '">' + esc(text) + '</div>';
 }
 async function refreshState() {
   try {
@@ -160,6 +191,88 @@ async function recover() {
 }
 refreshState();
 setInterval(refreshState, 5000);
+
+const REVERSAL_EXPLAIN = {
+  committed: '冲正成功：两库各一笔与原流水等额、方向相反的流水，原流水保留。',
+  aborted:   '冲正已撤销：两库均确认无冲正流水，可换新冲正单号重试。',
+  held:      '冲正已保留：状态无法核实，预备事务原样保留，需人工介入。',
+  duplicate: '已拒绝：该原单的冲正正在并发办理中。',
+  in_progress: '办理中：该冲正单仍有未完成的预备事务，请按冲正单号恢复。',
+  reserved:  '仅登记：该冲正单号已受理但未写入业务流水，请按冲正单号恢复确认。',
+  inconsistent: '不一致：存在提交决定但缺冲正流水，需人工核实。',
+};
+async function viewReversals() {
+  const orig = document.getElementById('rev-orig').value.trim();
+  const msg = document.getElementById('rev-msg');
+  const tb = document.querySelector('#tbl-reversals tbody');
+  const pre = document.getElementById('rev-logs');
+  if (!orig) { showMsg(msg, '请填写原结算号', 'error'); return null; }
+  const r = await fetch('/api/reversal/' + encodeURIComponent(orig));
+  const d = await r.json();
+  if (!d.reversals) { showMsg(msg, '查询失败：' + (d.error || '未知错误'), 'error'); return null; }
+  if (!d.reversals.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="empty">该原结算暂无冲正单</td></tr>';
+  } else {
+    tb.innerHTML = d.reversals.map(x =>
+      '<tr><td><span class="pill prepared">' + esc(x.reversal_no) + '</span></td><td>' +
+      esc(x.registry_status || '—') + '</td><td>' + esc(REVERSAL_EXPLAIN[x.status] || x.status) +
+      '</td><td>' + esc(fmtRow(x.debit_ledger)) + '</td><td>' + esc(fmtRow(x.credit_ledger)) +
+      '</td></tr>').join('');
+  }
+  pre.style.display = '';
+  pre.className = '';
+  const fmt = (rows) => rows.length
+    ? rows.map(x => x.created_at + '  ' + x.event.padEnd(18) + (x.note || '')).join('\n')
+    : '（无日志）';
+  pre.textContent = d.reversals.map(x =>
+    '== ' + x.reversal_no + ' ==\n[debit]\n' + fmt(x.debit_log) +
+    '\n[credit]\n' + fmt(x.credit_log)).join('\n\n');
+  return d;
+}
+async function startReversal() {
+  const orig = document.getElementById('rev-orig').value.trim();
+  const rev = document.getElementById('rev-no').value.trim();
+  const msg = document.getElementById('rev-msg');
+  if (!orig || !rev) { showMsg(msg, '请填写原结算号与冲正单号', 'error'); return; }
+  if (orig === rev) { showMsg(msg, '原结算号与冲正单号不能相同', 'error'); return; }
+  const body = new URLSearchParams({original_no: orig, reversal_no: rev});
+  try {
+    const r = await fetch('/api/reversal/start', {method: 'POST', body});
+    const d = await r.json();
+    if (d.ok) {
+      showMsg(msg, '冲正单 ' + rev + ' 已成功冲正原单 ' + orig + '：' +
+        JSON.stringify(d.result.detail), 'committed');
+    } else if (r.status === 409) {
+      showMsg(msg, '冲正被拒：' + d.error, 'held');
+    } else {
+      showMsg(msg, '冲正失败：' + (d.error || r.status), 'error');
+    }
+  } catch (e) {
+    showMsg(msg, '请求中断 —— 协调进程很可能已按故障点退出（符合预期）。\n' +
+      '请重启进程后，用原结算号 + 冲正单号点“按冲正单号恢复”。', 'held');
+  }
+  await viewReversals();
+  refreshState();
+}
+async function recoverReversal() {
+  const orig = document.getElementById('rev-orig').value.trim();
+  const rev = document.getElementById('rev-no').value.trim();
+  const msg = document.getElementById('rev-msg');
+  if (!rev) { showMsg(msg, '请填写冲正单号', 'error'); return; }
+  // Recovery is keyed by the reversal number; the original number is optional
+  // and is looked up from the registry when omitted.
+  const body = new URLSearchParams({reversal_no: rev});
+  if (orig) body.set('original_no', orig);
+  const r = await fetch('/api/reversal/recover', {method: 'POST', body});
+  const d = await r.json();
+  if (!d.result) { showMsg(msg, '恢复失败：' + (d.error || r.status), 'error'); return; }
+  const res = d.result;
+  showMsg(msg, '原单 ' + res.original_no + ' / 冲正单 ' + res.reversal_no +
+    ' → 状态【' + res.status + '】\n' + (REVERSAL_EXPLAIN[res.status] || '') +
+    '\n判定依据：' + res.basis + '\n详情：' + JSON.stringify(res.detail), res.status);
+  await viewReversals();
+  refreshState();
+}
 </script>
 </body>
 </html>
